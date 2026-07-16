@@ -1,43 +1,5 @@
-import nodemailer from "nodemailer";
-import { GMAIL_USER, GMAIL_PASS, WAHA_URL, WAHA_SESSION } from "./config";
+import { WAHA_URL, WAHA_SESSION } from "./config";
 
-export async function sendOtpEmail(email: string, otp: string) {
-    const user = GMAIL_USER();
-    const pass = GMAIL_PASS();
-    if (!user || !pass) {
-        console.warn("[Email] GMAIL_USER or GMAIL_PASS secret is not set. Falling back to console.");
-        console.log(`[Email] Send OTP ${otp} to ${email}`);
-        return;
-    }
-
-    const transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-            user,
-            pass
-        }
-    });
-
-    const mailOptions = {
-        from: user,
-        to: email,
-        subject: "CareGo Verification Code",
-        text: `Your CareGo verification code is: ${otp}. It will expire in 5 minutes.`,
-        html: `
-            <h2>CareGo Verification</h2>
-            <p>Your verification code is: <strong>${otp}</strong></p>
-            <p>It will expire in 5 minutes. Do not share this code with anyone.</p>
-        `
-    };
-
-    try {
-        await transporter.sendMail(mailOptions);
-        console.log(`[Email] OTP ${otp} sent successfully to ${email}`);
-    } catch (error) {
-        console.error("[Email] Failed to send OTP email:", error);
-        throw new Error("Gagal mengirim email OTP");
-    }
-}
 
 export async function sendOtpWaha(phone: string, otp: string) {
     const url = WAHA_URL();
@@ -77,11 +39,10 @@ export async function sendOtpWaha(phone: string, otp: string) {
 }
 
 export async function dispatchOtp(identifier: string, method: string, otp: string) {
-    if (method === "email") {
-        await sendOtpEmail(identifier, otp);
-    } else if (method === "whatsapp") {
+    if (method === "whatsapp") {
         await sendOtpWaha(identifier, otp);
     } else {
-        console.log(`[${method.toUpperCase()}] Send OTP ${otp} to ${identifier}`);
+        // Fallback for email or others since Gmail is removed
+        console.log(`[${method.toUpperCase()}] Send OTP ${otp} to ${identifier} (Console Fallback)`);
     }
 }
