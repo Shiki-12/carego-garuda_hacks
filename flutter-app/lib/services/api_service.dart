@@ -5,7 +5,7 @@ class ApiService {
   // Encore Cloud (managed database + hosting)
   // Local dev: http://10.0.2.2:4000 (Android emulator) or http://127.0.0.1:4000
   static const String baseUrl =
-      'https://staging-testapp-8y92.encr.app';
+      'https://staging-garudahacks-wtk2.encr.app';
 
   // ─── APP VERSION ─────────────────────────────────────────
 
