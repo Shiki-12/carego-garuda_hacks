@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'services/api_service.dart';
+import 'screens/login_screen.dart';
+import 'screens/home_screen.dart';
 
 void main() {
   runApp(const CareGoApp());
@@ -59,13 +61,9 @@ class _AuthGateState extends State<AuthGate> {
     }
     
     if (_isAuthenticated) {
-      return const Scaffold(
-        body: Center(child: Text('Home Screen (Stub)')),
-      );
+      return const HomeScreen();
     }
     
-    return const Scaffold(
-      body: Center(child: Text('Login Screen (Stub)')),
-    );
+    return const LoginScreen();
   }
 }

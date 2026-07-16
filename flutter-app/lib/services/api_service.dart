@@ -69,4 +69,52 @@ class ApiService {
       await clearToken();
     }
   }
+
+  // --- User Service ---
+  static Future<int> getBalance(int userId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/user/balance'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'userId': userId}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body)['balance'];
+    }
+    throw Exception('Failed to get balance');
+  }
+
+  static Future<bool> updateProfile(int userId, {String? phone, String? photoBase64}) async {
+    final Map<String, dynamic> body = {'userId': userId};
+    if (phone != null) body['phone'] = phone;
+    if (photoBase64 != null) body['photoBase64'] = photoBase64;
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/user/profile/update'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    return response.statusCode == 200;
+  }
+
+  // --- Ambulance Service ---
+  static Future<List<dynamic>> getRecommendations() async {
+    final response = await http.get(Uri.parse('$baseUrl/ambulance/recommendations'));
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body)['data'];
+    }
+    throw Exception('Failed to get recommendations');
+  }
+
+  static Future<Map<String, dynamic>> bookAmbulance(int userId, int providerId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/ambulance/book'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'userId': userId, 'providerId': providerId}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception('Booking failed');
+  }
 }
+
