@@ -1,5 +1,37 @@
-import { WAHA_URL, WAHA_SESSION } from "./config";
+import { EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, EMAILJS_PRIVATE_KEY, WAHA_URL, WAHA_SESSION } from "./config";
+import emailjs from "@emailjs/nodejs";
 
+export async function sendOtpEmail(email: string, otp: string) {
+    const serviceId = EMAILJS_SERVICE_ID();
+    const templateId = EMAILJS_TEMPLATE_ID();
+    const publicKey = EMAILJS_PUBLIC_KEY();
+    const privateKey = EMAILJS_PRIVATE_KEY();
+
+    if (!serviceId || !templateId || !publicKey) {
+        console.warn("[EmailJS] Missing EMAILJS secrets. Falling back to console.");
+        console.log(`[Email] Send OTP ${otp} to ${email}`);
+        return;
+    }
+
+    try {
+        await emailjs.send(
+            serviceId,
+            templateId,
+            {
+                to_email: email,
+                otp_code: otp,
+            },
+            {
+                publicKey: publicKey,
+                privateKey: privateKey,
+            }
+        );
+        console.log(`[EmailJS] OTP ${otp} sent successfully to ${email}`);
+    } catch (error) {
+        console.error("[EmailJS] Failed to send OTP email:", error);
+        throw new Error("Gagal mengirim email OTP via EmailJS");
+    }
+}
 
 export async function sendOtpWaha(phone: string, otp: string) {
     const url = WAHA_URL();
@@ -39,10 +71,12 @@ export async function sendOtpWaha(phone: string, otp: string) {
 }
 
 export async function dispatchOtp(identifier: string, method: string, otp: string) {
-    if (method === "whatsapp") {
+    if (method === "email") {
+        await sendOtpEmail(identifier, otp);
+    } else if (method === "whatsapp") {
         await sendOtpWaha(identifier, otp);
     } else {
-        // Fallback for email or others since Gmail is removed
+        // Fallback for unknown methods
         console.log(`[${method.toUpperCase()}] Send OTP ${otp} to ${identifier} (Console Fallback)`);
     }
 }
