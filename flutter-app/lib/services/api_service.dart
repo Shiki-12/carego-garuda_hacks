@@ -1,120 +1,219 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import '../models/models.dart';
 
 class ApiService {
-  // Use http://10.0.2.2:4000 for local Android emulator
+  // Change this to your local URL for development:
+  // Android Emulator: http://10.0.2.2:4000
+  // iOS Simulator: http://127.0.0.1:4000
+  // Production (Encore Cloud): update after deployment
   static const String baseUrl = 'http://10.0.2.2:4000';
-  
-  static Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('auth_token');
-  }
-  
-  static Future<void> setToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('auth_token', token);
-  }
-  
-  static Future<void> clearToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
+
+  // ─── APP VERSION ─────────────────────────────────────────
+
+  /// Check latest app version
+  static Future<Map<String, dynamic>> checkAppVersion() async {
+    try {
+      final res = await http.get(
+        Uri.parse('$baseUrl/app/version'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (res.statusCode != 200) return {};
+      return jsonDecode(res.body);
+    } catch (_) {
+      return {};
+    }
   }
 
-  // --- Auth Service ---
+  // ─── AUTH ───────────────────────────────────────────────
 
-  static Future<AuthResponse> login(String email, String password) async {
-    final response = await http.post(
+  /// Login with email + password
+  static Future<Map<String, dynamic>> login(
+      String email, String password) async {
+    final res = await http.post(
       Uri.parse('$baseUrl/auth/login'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'CaregoApp/1.0',
+        'Connection': 'keep-alive',
+      },
       body: jsonEncode({'email': email, 'password': password}),
     );
-    
-    if (response.statusCode == 200) {
-      final authResponse = AuthResponse.fromJson(jsonDecode(response.body));
-      await setToken(authResponse.token);
-      return authResponse;
-    } else {
-      throw Exception(jsonDecode(response.body)['error'] ?? 'Login failed');
+    if (res.statusCode != 200) {
+      final body = jsonDecode(res.body);
+      throw Exception(body['message'] ?? 'Login gagal');
     }
+    return jsonDecode(res.body);
   }
 
-  static Future<User> me() async {
-    final token = await getToken();
-    if (token == null) throw Exception('No session');
-    
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/me'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'token': token}),
+  /// Send OTP for login
+  static Future<Map<String, dynamic>> sendOtp(
+      String identifier, String method) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/auth/send-otp'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'CaregoApp/1.0',
+        'Connection': 'keep-alive',
+      },
+      body: jsonEncode({'identifier': identifier, 'method': method}),
     );
-    
-    if (response.statusCode == 200) {
-      return User.fromJson(jsonDecode(response.body));
-    } else {
-      await clearToken();
-      throw Exception('Session expired');
+    if (res.statusCode != 200) {
+      final body = jsonDecode(res.body);
+      throw Exception(body['message'] ?? 'Gagal mengirim OTP');
     }
-  }
-  
-  static Future<void> logout() async {
-    final token = await getToken();
-    if (token != null) {
-      await http.post(
-        Uri.parse('$baseUrl/auth/logout'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'token': token}),
-      );
-      await clearToken();
-    }
+    return jsonDecode(res.body);
   }
 
-  // --- User Service ---
+  /// Verify OTP for login
+  static Future<Map<String, dynamic>> verifyOtp(
+      String identifier, String code) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/auth/verify-otp'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'CaregoApp/1.0',
+        'Connection': 'keep-alive',
+      },
+      body: jsonEncode({'identifier': identifier, 'code': code}),
+    );
+    if (res.statusCode != 200) {
+      final body = jsonDecode(res.body);
+      throw Exception(body['message'] ?? 'Kode OTP salah');
+    }
+    return jsonDecode(res.body);
+  }
+
+  /// Register – Step 1: Send OTP
+  static Future<Map<String, dynamic>> registerSendOtp(
+      String email, String phone, String method) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/auth/register-send-otp'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'CaregoApp/1.0',
+        'Connection': 'keep-alive',
+      },
+      body: jsonEncode({'email': email, 'phone': phone, 'method': method}),
+    );
+    if (res.statusCode != 200) {
+      final body = jsonDecode(res.body);
+      throw Exception(body['message'] ?? 'Gagal mengirim OTP');
+    }
+    return jsonDecode(res.body);
+  }
+
+  /// Register – Step 2: Verify OTP & create account
+  static Future<Map<String, dynamic>> registerVerifyOtp(
+      String name,
+      String email,
+      String phone,
+      String password,
+      String code) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/auth/register-verify-otp'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'CaregoApp/1.0',
+        'Connection': 'keep-alive',
+      },
+      body: jsonEncode({
+        'name': name,
+        'email': email,
+        'phone': phone,
+        'password': password,
+        'code': code,
+      }),
+    );
+    if (res.statusCode != 200) {
+      final body = jsonDecode(res.body);
+      throw Exception(body['message'] ?? 'Registrasi gagal');
+    }
+    return jsonDecode(res.body);
+  }
+
+  /// Google OAuth (simulated)
+  static Future<Map<String, dynamic>> googleAuth(
+      String googleId, String email, String name) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/auth/google'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'CaregoApp/1.0',
+        'Connection': 'keep-alive',
+      },
+      body: jsonEncode({
+        'googleId': googleId,
+        'email': email,
+        'name': name,
+      }),
+    );
+    if (res.statusCode != 200) {
+      final body = jsonDecode(res.body);
+      throw Exception(body['message'] ?? 'Google Auth gagal');
+    }
+    return jsonDecode(res.body);
+  }
+
+  // ─── USER ──────────────────────────────────────────────
+
+  /// Get user wallet balance
   static Future<int> getBalance(int userId) async {
-    final response = await http.post(
+    final res = await http.post(
       Uri.parse('$baseUrl/user/balance'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'CaregoApp/1.0',
+        'Connection': 'keep-alive',
+      },
       body: jsonEncode({'userId': userId}),
     );
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body)['balance'];
-    }
-    throw Exception('Failed to get balance');
+    if (res.statusCode != 200) return 0;
+    final body = jsonDecode(res.body);
+    return body['balance'] as int? ?? 0;
   }
 
-  static Future<bool> updateProfile(int userId, {String? phone, String? photoBase64}) async {
-    final Map<String, dynamic> body = {'userId': userId};
-    if (phone != null) body['phone'] = phone;
-    if (photoBase64 != null) body['photoBase64'] = photoBase64;
-
-    final response = await http.post(
+  /// Update Profile
+  static Future<Map<String, dynamic>> updateProfile(
+      int userId, {String? phone, String? photoBase64}) async {
+    final res = await http.post(
       Uri.parse('$baseUrl/user/profile/update'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'CaregoApp/1.0',
+        'Connection': 'keep-alive',
+      },
+      body: jsonEncode({
+        'userId': userId,
+        if (phone != null) 'phone': phone,
+        if (photoBase64 != null) 'photoBase64': photoBase64,
+      }),
     );
-    return response.statusCode == 200;
+    if (res.statusCode != 200) {
+      final body = jsonDecode(res.body);
+      throw Exception(body['message'] ?? 'Gagal menyimpan profil');
+    }
+    return jsonDecode(res.body);
   }
 
-  // --- Ambulance Service ---
-  static Future<List<dynamic>> getRecommendations() async {
-    final response = await http.get(Uri.parse('$baseUrl/ambulance/recommendations'));
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body)['data'];
-    }
-    throw Exception('Failed to get recommendations');
-  }
+  // ─── RECOMMENDATIONS ──────────────────────────────────
 
-  static Future<Map<String, dynamic>> bookAmbulance(int userId, int providerId) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/ambulance/book'),
+  /// Get all recommendations
+  static Future<List<Map<String, dynamic>>> getRecommendations() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/ambulance/recommendations'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'userId': userId, 'providerId': providerId}),
     );
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    }
-    throw Exception('Booking failed');
+    if (res.statusCode != 200) return [];
+    final body = jsonDecode(res.body);
+    final list = body['recommendations'] as List<dynamic>? ?? [];
+    return list.cast<Map<String, dynamic>>();
   }
 }
-

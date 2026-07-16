@@ -101,12 +101,8 @@ export const registerSendOtp = api(
             VALUES (${req.phone || req.email}, ${otp}, ${req.method}, NOW(), NOW() + INTERVAL '5 minutes')
         `;
 
-        if (req.method === 'whatsapp') {
-            // Placeholder for WAHA HTTP call
-            console.log(`[WAHA] Send OTP ${otp} to ${req.phone}`);
-        } else {
-            console.log(`[EMAIL] Send OTP ${otp} to ${req.email}`);
-        }
+        // Log OTP to console (no external OTP provider)
+        console.log(`[OTP] Code ${otp} sent to ${req.phone || req.email} via ${req.method}`);
 
         return { success: true, message: `OTP pendaftaran telah dikirim via ${req.method}` };
     }
