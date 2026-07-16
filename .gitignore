@@ -5,6 +5,7 @@
 
 # ── Local-only documentation (not for Git) ──
 docs-Main/
+docs/
 
 # ── OS files ──
 .DS_Store
