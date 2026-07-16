@@ -1,7 +1,7 @@
 # CareGo Healthcare Platform
 
 > **Care + Go** — Indonesian on-demand healthcare services platform.  
-> Garuda Hacks Hackathon Entry.
+> Garuda Hacks Hackathon Entry
 
 ---
 
