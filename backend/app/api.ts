@@ -1,6 +1,6 @@
 import { api } from "encore.dev/api";
 
-export interface VersionResponse {
+export interface AppVersionResponse {
     latestVersion: string;
     downloadUrl: string;
     releaseNotes: string;
@@ -9,11 +9,11 @@ export interface VersionResponse {
 
 export const version = api(
     { expose: true, method: "GET", path: "/app/version" },
-    async (): Promise<VersionResponse> => {
+    async (): Promise<AppVersionResponse> => {
         return {
             latestVersion: "1.0.0",
-            downloadUrl: "https://github.com/rey109/carego-healthcare-mobile-prototype/releases/latest/download/carego-release.apk",
-            releaseNotes: "Versi pertama CAREGO - Semua fitur dasar telah tersedia.",
+            downloadUrl: "https://carego.id/download",
+            releaseNotes: "Initial release of CareGo Healthcare Platform.",
             forceUpdate: false
         };
     }

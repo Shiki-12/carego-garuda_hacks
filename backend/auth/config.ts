@@ -1,3 +1,7 @@
 import { secret } from "encore.dev/config";
 
-export const wahaApiKey = secret("WAHA_API_KEY");
+
+
+// WAHA (WhatsApp HTTP API) configuration for sending OTPs via WhatsApp
+export const WAHA_URL = secret("WAHA_URL");
+export const WAHA_SESSION = secret("WAHA_SESSION");
