@@ -1,5 +1,6 @@
 import { api } from "encore.dev/api";
 import { db } from "../db/db";
+import { logActivity } from "../utils/logger";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
@@ -28,13 +29,6 @@ export interface SuccessResponse {
 
 const generateToken = (): string => crypto.randomBytes(32).toString('hex');
 const generateOTP = (): string => Math.floor(100000 + Math.random() * 900000).toString();
-
-async function logActivity(userId: number, userName: string, userRole: string, action: string, detail: string = "") {
-    await db.exec`
-        INSERT INTO activity_logs (user_id, user_name, user_role, action, detail)
-        VALUES (${userId}, ${userName}, ${userRole}, ${action}, ${detail})
-    `;
-}
 
 async function createSession(userId: number): Promise<string> {
     const token = generateToken();
@@ -68,7 +62,7 @@ export const register = api(
         await db.exec`INSERT INTO wallets (user_id, balance) VALUES (${user.id}, 0)`;
 
         const token = await createSession(user.id);
-        await logActivity(user.id, user.name, user.role, 'REGISTER', 'Direct registration');
+        await logActivity(user.id, 'REGISTER', 'Direct registration');
 
         return {
             token,
@@ -133,7 +127,7 @@ export const registerVerifyOtp = api(
 
         await db.exec`INSERT INTO wallets (user_id, balance) VALUES (${user.id}, 0)`;
         const token = await createSession(user.id);
-        await logActivity(user.id, user.name, user.role, 'REGISTER', 'OTP registration');
+        await logActivity(user.id, 'REGISTER', 'OTP registration');
 
         return {
             token,
@@ -163,7 +157,7 @@ export const login = api(
         }
 
         const token = await createSession(user.id);
-        await logActivity(user.id, user.name, user.role, 'LOGIN', 'Email login');
+        await logActivity(user.id, 'LOGIN', 'Email login');
 
         return {
             token,
@@ -214,14 +208,14 @@ export const verifyOtp = api(
             `;
             if (user) {
                 await db.exec`INSERT INTO wallets (user_id, balance) VALUES (${user.id}, 0)`;
-                await logActivity(user.id, user.name, user.role, 'REGISTER', 'Auto-created via OTP');
+                await logActivity(user.id, 'REGISTER', 'Auto-created via OTP');
             }
         }
 
         if (!user) throw new Error("Gagal verifikasi pengguna");
 
         const token = await createSession(user.id);
-        await logActivity(user.id, user.name, user.role, 'LOGIN', 'OTP login');
+        await logActivity(user.id, 'LOGIN', 'OTP login');
 
         return {
             token,
@@ -250,7 +244,7 @@ export const google = api(
             `;
             if (user) {
                 await db.exec`INSERT INTO wallets (user_id, balance) VALUES (${user.id}, 0)`;
-                await logActivity(user.id, user.name, user.role, 'REGISTER', 'Google OAuth');
+                await logActivity(user.id, 'REGISTER', 'Google OAuth');
             }
         } else if (!user.google_id) {
             // Link google account to existing email account
@@ -260,7 +254,7 @@ export const google = api(
         if (!user) throw new Error("Gagal login dengan Google");
 
         const token = await createSession(user.id);
-        await logActivity(user.id, user.name, user.role, 'LOGIN', 'Google login');
+        await logActivity(user.id, 'LOGIN', 'Google login');
 
         return {
             token,
@@ -306,7 +300,7 @@ export const logout = api(
         if (session) {
             const user = await db.queryRow`SELECT name, role FROM users WHERE id = ${session.user_id}`;
             if (user) {
-                await logActivity(session.user_id, user.name, user.role, 'LOGOUT', '');
+                await logActivity(session.user_id, 'LOGOUT', '');
             }
             await db.exec`DELETE FROM sessions WHERE token = ${req.token}`;
         }

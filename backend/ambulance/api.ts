@@ -1,5 +1,6 @@
 import { api } from "encore.dev/api";
 import { db } from "../db/db";
+import { logActivity } from "../utils/logger";
 
 export interface Recommendation {
     id: number;
@@ -72,10 +73,7 @@ export const book = api(
 
         if (!booking) throw new Error("Gagal membuat booking");
         
-        await db.exec`
-            INSERT INTO activity_logs (user_id, user_name, user_role, action, detail)
-            SELECT id, name, role, 'AMBULANCE_BOOK', 'User booked ambulance' FROM users WHERE id = ${req.userId}
-        `;
+        await logActivity(req.userId, 'AMBULANCE_BOOK', 'User booked ambulance');
 
         return {
             bookingId: booking.id,

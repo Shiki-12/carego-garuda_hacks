@@ -1,5 +1,6 @@
 import { api } from "encore.dev/api";
 import { db } from "../db/db";
+import { logActivity } from "../utils/logger";
 
 export interface BalanceRequest {
     userId: number;
@@ -43,10 +44,7 @@ export const updateProfile = api(
             await db.exec`UPDATE users SET photo_url = ${req.photoBase64} WHERE id = ${req.userId}`;
         }
         
-        await db.exec`
-            INSERT INTO activity_logs (user_id, user_name, user_role, action, detail)
-            SELECT id, name, role, 'UPDATE_PROFILE', 'User updated profile' FROM users WHERE id = ${req.userId}
-        `;
+        await logActivity(req.userId, 'UPDATE_PROFILE', 'User updated profile');
         
         return { success: true };
     }
