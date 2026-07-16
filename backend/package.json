@@ -13,11 +13,13 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^26.0.1",
+    "@types/nodemailer": "^8.0.1",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
-    "encore.dev": "^1.57.1"
+    "encore.dev": "^1.57.1",
+    "nodemailer": "^9.0.3"
   }
 }

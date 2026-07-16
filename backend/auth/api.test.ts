@@ -19,7 +19,7 @@ describe("Auth Service", () => {
 
         // 2. Login
         const loginRes = await login({
-            identifier: testEmail,
+            email: testEmail,
             password: "password123"
         });
 
@@ -38,7 +38,7 @@ describe("Auth Service", () => {
 
         try {
             await login({
-                identifier: testEmail,
+                email: testEmail,
                 password: "wrongpassword"
             });
             assert.fail("Should have thrown an error for wrong password");

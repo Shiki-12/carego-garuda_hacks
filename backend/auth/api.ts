@@ -1,6 +1,7 @@
 import { api } from "encore.dev/api";
 import { db } from "../db/db";
 import { logActivity } from "../utils/logger";
+import { dispatchOtp } from "./otp";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
@@ -94,9 +95,8 @@ export const registerSendOtp = api(
             INSERT INTO otp_codes (identifier, code, method, created_at, expires_at)
             VALUES (${req.phone || req.email}, ${otp}, ${req.method}, NOW(), NOW() + INTERVAL '5 minutes')
         `;
-
-        // Log OTP to console (no external OTP provider)
-        console.log(`[OTP] Code ${otp} sent to ${req.phone || req.email} via ${req.method}`);
+        // Dispatch OTP via Email or WAHA
+        await dispatchOtp(req.phone || req.email, req.method, otp);
 
         return { success: true, message: `OTP pendaftaran telah dikirim via ${req.method}` };
     }
@@ -181,8 +181,7 @@ export const sendOtp = api(
             INSERT INTO otp_codes (identifier, code, method, created_at, expires_at)
             VALUES (${req.identifier}, ${otp}, ${req.method}, NOW(), NOW() + INTERVAL '5 minutes')
         `;
-
-        console.log(`[${req.method.toUpperCase()}] Send OTP ${otp} to ${req.identifier}`);
+        await dispatchOtp(req.identifier, req.method, otp);
         return { success: true, message: `OTP telah dikirim via ${req.method}` };
     }
 );

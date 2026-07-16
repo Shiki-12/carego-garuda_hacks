@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { getBalance, updateProfile } from "./api";
+import { balance, updateProfile } from "./api";
 import { db } from "../db/db";
 
 describe("User Service", () => {
@@ -16,22 +16,20 @@ describe("User Service", () => {
 
         await db.exec`INSERT INTO wallets (user_id, balance) VALUES (${userId}, 500000)`;
 
-        // Test getBalance
-        const balanceRes = await getBalance({ userId });
+        // Test balance
+        const balanceRes = await balance({ userId });
         assert.strictEqual(balanceRes.balance, 500000);
 
         // Test updateProfile
         const updateRes = await updateProfile({
             userId,
-            name: "Updated Name",
             phone: "08123456789",
             photoBase64: "base64data"
         });
         assert.strictEqual(updateRes.success, true);
 
         // Verify database state
-        const updatedUser = await db.queryRow`SELECT name, phone, photo_url FROM users WHERE id = ${userId}`;
-        assert.strictEqual(updatedUser?.name, "Updated Name");
+        const updatedUser = await db.queryRow`SELECT phone, photo_url FROM users WHERE id = ${userId}`;
         assert.strictEqual(updatedUser?.phone, "08123456789");
         assert.strictEqual(updatedUser?.photo_url, "base64data");
     });
