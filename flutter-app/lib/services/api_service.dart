@@ -2,11 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Change this to your local URL for development:
-  // Android Emulator: http://10.0.2.2:4000
-  // iOS Simulator: http://127.0.0.1:4000
-  // Production (Encore Cloud): update after deployment
-  static const String baseUrl = 'http://10.0.2.2:4000';
+  // Encore Cloud (managed database + hosting)
+  // Local dev: http://10.0.2.2:4000 (Android emulator) or http://127.0.0.1:4000
+  static const String baseUrl =
+      'https://staging-testapp-8y92.encr.app';
 
   // ─── APP VERSION ─────────────────────────────────────────
 
