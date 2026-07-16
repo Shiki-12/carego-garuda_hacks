@@ -4,7 +4,7 @@
   "description": "CareGo Healthcare Platform Backend",
   "main": "index.js",
   "scripts": {
-    "test": "echo 'No tests'"
+    "test": "encore test"
   },
   "keywords": [],
   "author": "",
