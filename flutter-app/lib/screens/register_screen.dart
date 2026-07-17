@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
@@ -16,7 +17,8 @@ class RegisterScreen extends StatefulWidget {
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
+class _RegisterScreenState extends State<RegisterScreen>
+    with SingleTickerProviderStateMixin {
   int _step = 1; // 1: form, 2: verify OTP
   String _otpMethod = 'whatsapp';
 
@@ -32,23 +34,87 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _success = '';
   bool _loading = false;
 
-  Future<void> _handleSendOtp() async {
-    setState(() { _error = ''; _success = ''; });
+  // Resend timer
+  Timer? _resendTimer;
+  int _resendCountdown = 0;
 
+  // Animation
+  late AnimationController _animController;
+  late Animation<double> _fadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeAnim =
+        CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+    _animController.forward();
+  }
+
+  @override
+  void dispose() {
+    _resendTimer?.cancel();
+    _animController.dispose();
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _phoneCtrl.dispose();
+    _passwordCtrl.dispose();
+    _confirmCtrl.dispose();
+    _otpCodeCtrl.dispose();
+    super.dispose();
+  }
+
+  // ─── Validation ────────────────────────────────────────
+  String? _validateForm() {
+    if (_nameCtrl.text.trim().isEmpty) return 'Nama lengkap tidak boleh kosong';
+    if (_nameCtrl.text.trim().length < 3) return 'Nama minimal 3 karakter';
+
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty) return 'Email tidak boleh kosong';
+    final emailRegex = RegExp(r'^[\w\.\-]+@[\w\.\-]+\.\w{2,}$');
+    if (!emailRegex.hasMatch(email)) return 'Format email tidak valid';
+
+    final phone = _phoneCtrl.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
+    if (phone.isEmpty) return 'Nomor WhatsApp tidak boleh kosong';
+    if (phone.length < 9) return 'Nomor WhatsApp minimal 9 digit';
+
+    if (_passwordCtrl.text.length < 6) return 'Password minimal 6 karakter';
     if (_passwordCtrl.text != _confirmCtrl.text) {
-      setState(() => _error = 'Password dan konfirmasi tidak cocok');
-      return;
+      return 'Password dan konfirmasi tidak cocok';
     }
-    if (_passwordCtrl.text.length < 6) {
-      setState(() => _error = 'Password minimal 6 karakter');
-      return;
-    }
-    if (_otpMethod == 'whatsapp' && _phoneCtrl.text.trim().isEmpty) {
-      setState(() => _error = 'Nomor WhatsApp diperlukan');
+
+    return null;
+  }
+
+  // ─── Resend timer ──────────────────────────────────────
+  void _startResendTimer() {
+    _resendCountdown = 60;
+    _resendTimer?.cancel();
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_resendCountdown <= 0) {
+        timer.cancel();
+      } else {
+        setState(() => _resendCountdown--);
+      }
+    });
+  }
+
+  // ─── Send OTP ──────────────────────────────────────────
+  Future<void> _handleSendOtp() async {
+    final validationError = _validateForm();
+    if (validationError != null) {
+      setState(() => _error = validationError);
       return;
     }
 
-    setState(() => _loading = true);
+    setState(() {
+      _error = '';
+      _success = '';
+      _loading = true;
+    });
     try {
       final res = await ApiService.registerSendOtp(
         _emailCtrl.text.trim(),
@@ -59,15 +125,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _success = res['message'] ?? 'OTP terkirim';
         _step = 2;
       });
+      _startResendTimer();
     } catch (e) {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
+  // ─── Resend OTP ────────────────────────────────────────
+  Future<void> _handleResendOtp() async {
+    if (_resendCountdown > 0) return;
+    setState(() {
+      _error = '';
+      _success = '';
+      _loading = true;
+    });
+    try {
+      final res = await ApiService.registerSendOtp(
+        _emailCtrl.text.trim(),
+        _phoneCtrl.text.trim(),
+        _otpMethod,
+      );
+      setState(() => _success = res['message'] ?? 'OTP terkirim ulang');
+      _startResendTimer();
+    } catch (e) {
+      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // ─── Verify OTP ────────────────────────────────────────
   Future<void> _handleVerify() async {
-    setState(() { _error = ''; _success = ''; _loading = true; });
+    if (_otpCodeCtrl.text.trim().length != 6) {
+      setState(() => _error = 'Kode OTP harus 6 digit');
+      return;
+    }
+    setState(() {
+      _error = '';
+      _success = '';
+      _loading = true;
+    });
     try {
       final res = await ApiService.registerVerifyOtp(
         _nameCtrl.text.trim(),
@@ -80,109 +179,262 @@ class _RegisterScreenState extends State<RegisterScreen> {
     } catch (e) {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFF0FDFA), Colors.white, Color(0xFFECFEFF)],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-              child: Column(
-                children: [
-                  // ── Logo ──
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0D9488),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF0D9488).withOpacity(0.2),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(Icons.favorite, color: Colors.white, size: 30),
-                  ),
-                  const SizedBox(height: 12),
-                  Text('CAREGO',
-                      style: GoogleFonts.inter(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF0F766E))),
-                  const SizedBox(height: 4),
-                  Text('Daftar Akun Baru Pasien',
-                      style: GoogleFonts.inter(
-                          fontSize: 12, color: Colors.grey.shade400)),
-                  const SizedBox(height: 24),
-
-                  // ── Card ──
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.shade200.withOpacity(0.5),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                      border: Border.all(color: Colors.grey.shade100),
-                    ),
-                    child: Column(
-                      children: [
-                        if (_error.isNotEmpty) _msgBox(_error, true),
-                        if (_success.isNotEmpty) _msgBox(_success, false),
-                        if (_step == 1) _buildForm(),
-                        if (_step == 2) _buildOtpVerify(),
-                        const SizedBox(height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text('Sudah punya akun? ',
-                                style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade400)),
-                            GestureDetector(
-                              onTap: widget.onGoToLogin,
-                              child: Text('Masuk',
-                                  style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: const Color(0xFF0D9488))),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+      body: Stack(
+        children: [
+          // ── Background gradient ──
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFF0FDFA),
+                  Colors.white,
+                  Color(0xFFECFEFF),
+                  Color(0xFFF0FFF4),
                 ],
+                stops: [0.0, 0.3, 0.7, 1.0],
               ),
             ),
           ),
-        ),
+          // Top-left blob
+          Positioned(
+            top: -50,
+            left: -50,
+            child: Container(
+              width: 180,
+              height: 180,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF14B8A6).withOpacity(0.07),
+                    const Color(0xFF14B8A6).withOpacity(0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Bottom-right blob
+          Positioned(
+            bottom: -70,
+            right: -50,
+            child: Container(
+              width: 220,
+              height: 220,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF0D9488).withOpacity(0.06),
+                    const Color(0xFF0D9488).withOpacity(0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // ── Main content ──
+          SafeArea(
+            child: Center(
+              child: FadeTransition(
+                opacity: _fadeAnim,
+                child: SingleChildScrollView(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  child: Column(
+                    children: [
+                      // ── Logo ──
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color:
+                                  const Color(0xFF0D9488).withOpacity(0.15),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0D9488),
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: const Icon(Icons.favorite,
+                                  color: Colors.white, size: 32),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text('Buat Akun Baru',
+                          style: GoogleFonts.inter(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF0F766E))),
+                      const SizedBox(height: 4),
+                      Text('Daftar untuk memulai layanan CareGo',
+                          style: GoogleFonts.inter(
+                              fontSize: 12, color: Colors.grey.shade400)),
+                      const SizedBox(height: 24),
+
+                      // ── Step indicator ──
+                      _buildStepIndicator(),
+                      const SizedBox(height: 20),
+
+                      // ── Card ──
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.95),
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF0D9488)
+                                  .withOpacity(0.06),
+                              blurRadius: 32,
+                              offset: const Offset(0, 12),
+                            ),
+                            BoxShadow(
+                              color:
+                                  Colors.grey.shade100.withOpacity(0.5),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                          border: Border.all(
+                              color:
+                                  Colors.grey.shade100.withOpacity(0.8)),
+                        ),
+                        child: Column(
+                          children: [
+                            if (_error.isNotEmpty) _msgBox(_error, true),
+                            if (_success.isNotEmpty)
+                              _msgBox(_success, false),
+
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 300),
+                              child: _step == 1
+                                  ? _buildForm()
+                                  : _buildOtpVerify(),
+                            ),
+
+                            const SizedBox(height: 22),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text('Sudah punya akun? ',
+                                    style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade400)),
+                                GestureDetector(
+                                  onTap: widget.onGoToLogin,
+                                  child: Text('Masuk',
+                                      style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color:
+                                              const Color(0xFF0D9488))),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // ─── Helpers ──────────────────────────────────────────
+  // ─── Step Indicator ────────────────────────────────────
+  Widget _buildStepIndicator() {
+    return Row(
+      children: [
+        _stepDot(1, 'Isi Data'),
+        Expanded(
+          child: Container(
+            height: 2,
+            color: _step >= 2
+                ? const Color(0xFF0D9488)
+                : Colors.grey.shade200,
+          ),
+        ),
+        _stepDot(2, 'Verifikasi'),
+      ],
+    );
+  }
+
+  Widget _stepDot(int step, String label) {
+    final active = _step >= step;
+    return Column(
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: active ? const Color(0xFF0D9488) : Colors.grey.shade200,
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                        color: const Color(0xFF0D9488).withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2))
+                  ]
+                : [],
+          ),
+          child: Center(
+            child: active
+                ? (step < _step
+                    ? const Icon(Icons.check, color: Colors.white, size: 16)
+                    : Text('$step',
+                        style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)))
+                : Text('$step',
+                    style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade500)),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(label,
+            style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                color: active
+                    ? const Color(0xFF0F766E)
+                    : Colors.grey.shade400)),
+      ],
+    );
+  }
+
+  // ─── Helpers ───────────────────────────────────────────
 
   Widget _msgBox(String msg, bool isError) {
     return Container(
@@ -196,13 +448,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
           color: isError ? const Color(0xFFFECACA) : const Color(0xFFBBF7D0),
         ),
       ),
-      child: Text(msg,
-          style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: isError
-                  ? const Color(0xFFDC2626)
-                  : const Color(0xFF15803D))),
+      child: Row(
+        children: [
+          Icon(
+            isError ? Icons.error_outline : Icons.check_circle_outline,
+            size: 16,
+            color:
+                isError ? const Color(0xFFDC2626) : const Color(0xFF15803D),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(msg,
+                style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: isError
+                        ? const Color(0xFFDC2626)
+                        : const Color(0xFF15803D))),
+          ),
+        ],
+      ),
     );
   }
 
@@ -213,7 +478,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     required IconData icon,
     TextInputType? keyboardType,
     bool isPassword = false,
-    bool required_ = true,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -224,18 +488,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
               style: GoogleFonts.inter(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade500)),
+                  color: Colors.grey.shade600)),
           const SizedBox(height: 6),
           Container(
             decoration: BoxDecoration(
+              color: Colors.grey.shade50.withOpacity(0.5),
               border: Border.all(color: Colors.grey.shade200),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Row(
               children: [
                 Padding(
                   padding: const EdgeInsets.only(left: 16),
-                  child: Icon(icon, size: 16, color: Colors.grey.shade400),
+                  child:
+                      Icon(icon, size: 18, color: const Color(0xFF0D9488)),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -244,14 +510,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     obscureText: isPassword && !_showPassword,
                     keyboardType: keyboardType,
                     style: GoogleFonts.inter(
-                        fontSize: 13, color: Colors.grey.shade800),
+                        fontSize: 14, color: Colors.grey.shade800),
                     decoration: InputDecoration(
                       hintText: hint,
                       hintStyle: GoogleFonts.inter(
-                          fontSize: 12, color: Colors.grey.shade400),
+                          fontSize: 13, color: Colors.grey.shade400),
                       border: InputBorder.none,
                       contentPadding:
-                          const EdgeInsets.symmetric(vertical: 14),
+                          const EdgeInsets.symmetric(vertical: 15),
                     ),
                   ),
                 ),
@@ -263,9 +529,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       padding: const EdgeInsets.only(right: 16),
                       child: Icon(
                         _showPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        size: 16,
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 18,
                         color: Colors.grey.shade400,
                       ),
                     ),
@@ -278,14 +544,62 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  Widget _primaryButton({
+    required VoidCallback onPressed,
+    required String label,
+    required String loadingLabel,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton(
+        onPressed: _loading ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF0D9488),
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: const Color(0xFF0D9488).withOpacity(0.6),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14)),
+          elevation: 0,
+          shadowColor: Colors.transparent,
+        ),
+        child: _loading
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(loadingLabel,
+                      style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white)),
+                ],
+              )
+            : Text(label,
+                style: GoogleFonts.inter(
+                    fontSize: 14, fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+
   Widget _buildForm() {
     return Column(
+      key: const ValueKey('register_form'),
       children: [
         _inputField(
           controller: _nameCtrl,
           label: 'Nama Lengkap',
-          hint: 'Nama Lengkap',
-          icon: Icons.person_outline,
+          hint: 'Masukkan nama lengkap Anda',
+          icon: Icons.person_outline_rounded,
         ),
         _inputField(
           controller: _emailCtrl,
@@ -297,142 +611,198 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _inputField(
           controller: _phoneCtrl,
           label: 'Nomor WhatsApp',
-          hint: 'Cth: 0812345678',
+          hint: 'Cth: 081234567890',
           icon: Icons.phone_outlined,
           keyboardType: TextInputType.phone,
-          required_: false,
         ),
         _inputField(
           controller: _passwordCtrl,
           label: 'Password',
           hint: 'Minimal 6 karakter',
-          icon: Icons.lock_outline,
+          icon: Icons.lock_outline_rounded,
           isPassword: true,
         ),
         _inputField(
           controller: _confirmCtrl,
           label: 'Konfirmasi Password',
-          hint: 'Ulangi password',
-          icon: Icons.lock_outline,
+          hint: 'Ulangi password Anda',
+          icon: Icons.lock_outline_rounded,
           isPassword: true,
         ),
-        // Method selector
+
+        // OTP Method selector
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Metode Verifikasi OTP',
+            Text('Kirim Kode Verifikasi via',
                 style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade500)),
+                    color: Colors.grey.shade600)),
             const SizedBox(height: 8),
             Row(
               children: [
-                _methodBtn('WhatsApp', Icons.phone, 'whatsapp'),
+                _methodBtn('WhatsApp', Icons.chat_rounded, 'whatsapp'),
                 const SizedBox(width: 12),
-                _methodBtn('Email', Icons.email_outlined, 'email'),
+                _methodBtn('Email', Icons.mail_outline_rounded, 'email'),
               ],
             ),
           ],
         ),
-        const SizedBox(height: 20),
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: ElevatedButton(
-            onPressed: _loading ? null : _handleSendOtp,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0D9488),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              elevation: 2,
-            ),
-            child: Text(_loading ? 'Mengirim Kode...' : 'Daftar & Kirim OTP',
-                style: GoogleFonts.inter(
-                    fontSize: 13, fontWeight: FontWeight.w700)),
-          ),
+        const SizedBox(height: 22),
+        _primaryButton(
+          onPressed: _handleSendOtp,
+          label: 'Daftar & Kirim Kode OTP',
+          loadingLabel: 'Mengirim...',
         ),
       ],
     );
   }
 
   Widget _buildOtpVerify() {
+    final destination = _otpMethod == 'whatsapp'
+        ? _phoneCtrl.text.trim()
+        : _emailCtrl.text.trim();
+
     return Column(
+      key: const ValueKey('otp_verify_form'),
       children: [
-        Text('Masukkan Kode OTP',
+        // Info banner
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0FDFA),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF99F6E4)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D9488).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  _otpMethod == 'whatsapp'
+                      ? Icons.chat_rounded
+                      : Icons.mail_outline_rounded,
+                  size: 18,
+                  color: const Color(0xFF0F766E),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Kode Verifikasi Terkirim!',
+                        style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF0F766E))),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Dikirim ke $destination',
+                      style: GoogleFonts.inter(
+                          fontSize: 10, color: Colors.grey.shade500),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // OTP Input
+        Text('Masukkan 6 Digit Kode',
             style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey.shade500)),
-        const SizedBox(height: 8),
+                color: Colors.grey.shade600)),
+        const SizedBox(height: 10),
         TextField(
           controller: _otpCodeCtrl,
           maxLength: 6,
           textAlign: TextAlign.center,
           keyboardType: TextInputType.number,
           style: GoogleFonts.inter(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 16,
-              color: Colors.grey.shade800),
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 12,
+              color: const Color(0xFF0F766E)),
           decoration: InputDecoration(
             counterText: '',
-            hintText: '123456',
+            hintText: '• • • • • •',
             hintStyle: GoogleFonts.inter(
-                fontSize: 22, color: Colors.grey.shade300, letterSpacing: 16),
+                fontSize: 24,
+                color: Colors.grey.shade300,
+                letterSpacing: 12),
+            filled: true,
+            fillColor: Colors.grey.shade50,
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: Colors.grey.shade200)),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide(color: Colors.grey.shade200)),
             focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 borderSide:
                     const BorderSide(color: Color(0xFF0D9488), width: 2)),
-            contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(vertical: 16),
           ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Kode dikirim ke ${_otpMethod == 'whatsapp' ? _phoneCtrl.text : _emailCtrl.text}',
-          style: GoogleFonts.inter(fontSize: 10, color: Colors.grey.shade400),
-        ),
-        const SizedBox(height: 20),
+
+        const SizedBox(height: 12),
+        // Resend timer
+        _resendCountdown > 0
+            ? Text('Kirim ulang dalam ${_resendCountdown}s',
+                style: GoogleFonts.inter(
+                    fontSize: 11, color: Colors.grey.shade400))
+            : GestureDetector(
+                onTap: _loading ? null : _handleResendOtp,
+                child: Text('Kirim Ulang Kode OTP',
+                    style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF0D9488))),
+              ),
+
+        const SizedBox(height: 22),
         Row(
           children: [
             Expanded(
               child: SizedBox(
-                height: 48,
+                height: 50,
                 child: OutlinedButton(
-                  onPressed: () => setState(() => _step = 1),
+                  onPressed: () => setState(() {
+                    _step = 1;
+                    _otpCodeCtrl.clear();
+                    _error = '';
+                    _success = '';
+                    _resendTimer?.cancel();
+                    _resendCountdown = 0;
+                  }),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(color: Colors.grey.shade200),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(14)),
                   ),
                   child: Text('Kembali',
                       style: GoogleFonts.inter(
-                          fontSize: 12, color: Colors.grey.shade600)),
+                          fontSize: 13, color: Colors.grey.shade600)),
                 ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: SizedBox(
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _loading ? null : _handleVerify,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0D9488),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    elevation: 2,
-                  ),
-                  child: Text(
-                      _loading ? 'Mendaftar...' : 'Verifikasi & Daftar',
-                      style: GoogleFonts.inter(
-                          fontSize: 12, fontWeight: FontWeight.w700)),
-                ),
+              child: _primaryButton(
+                onPressed: _handleVerify,
+                label: 'Verifikasi',
+                loadingLabel: 'Mendaftar...',
               ),
             ),
           ],
@@ -448,31 +818,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
         onTap: () => setState(() => _otpMethod = method),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
             color: selected ? const Color(0xFFF0FDFA) : Colors.transparent,
             border: Border.all(
                 color: selected
                     ? const Color(0xFF0D9488)
-                    : Colors.grey.shade200),
-            borderRadius: BorderRadius.circular(12),
+                    : Colors.grey.shade200,
+                width: selected ? 1.5 : 1),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon,
-                  size: 14,
+                  size: 16,
                   color: selected
                       ? const Color(0xFF0F766E)
-                      : Colors.grey.shade600),
-              const SizedBox(width: 6),
+                      : Colors.grey.shade500),
+              const SizedBox(width: 8),
               Text(label,
                   style: GoogleFonts.inter(
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     color: selected
                         ? const Color(0xFF0F766E)
-                        : Colors.grey.shade600,
+                        : Colors.grey.shade500,
                   )),
             ],
           ),
