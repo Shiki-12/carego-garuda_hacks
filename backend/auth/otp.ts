@@ -1,5 +1,4 @@
 import { EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, EMAILJS_PRIVATE_KEY, WAHA_URL, WAHA_SESSION } from "./config";
-import emailjs from "@emailjs/nodejs";
 
 export async function sendOtpEmail(email: string, otp: string) {
     const serviceId = EMAILJS_SERVICE_ID();
@@ -14,18 +13,28 @@ export async function sendOtpEmail(email: string, otp: string) {
     }
 
     try {
-        await emailjs.send(
-            serviceId,
-            templateId,
-            {
-                to_email: email,
-                otp_code: otp,
+        const response = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
             },
-            {
-                publicKey: publicKey,
-                privateKey: privateKey,
-            }
-        );
+            body: JSON.stringify({
+                service_id: serviceId,
+                template_id: templateId,
+                user_id: publicKey,
+                accessToken: privateKey,
+                template_params: {
+                    to_email: email,
+                    otp_code: otp,
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`EmailJS API error: ${response.status} ${errText}`);
+        }
+
         console.log(`[EmailJS] OTP ${otp} sent successfully to ${email}`);
     } catch (error) {
         console.error("[EmailJS] Failed to send OTP email:", error);
@@ -43,6 +52,12 @@ export async function sendOtpWaha(phone: string, otp: string) {
         return;
     }
 
+    // Format phone number to WhatsApp standard (e.g., 0812... -> 62812...)
+    let formattedPhone = phone.replace(/[^0-9]/g, '');
+    if (formattedPhone.startsWith('0')) {
+        formattedPhone = '62' + formattedPhone.substring(1);
+    }
+
     try {
         // WAHA API: POST /api/sendText
         const response = await fetch(`${url}/api/sendText`, {
@@ -51,8 +66,8 @@ export async function sendOtpWaha(phone: string, otp: string) {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                chatId: `${phone.replace(/[^0-9]/g, '')}@c.us`,
-                text: `*CareGo*\n\nKode verifikasi Anda adalah: *${otp}*\nBerlaku selama 5 menit. Jangan bagikan kode ini.`,
+                chatId: `${formattedPhone}@c.us`,
+                text: `Kode OTP CareGo Anda adalah: *${otp}*\n\nBerlaku selama 5 menit. Jangan bagikan kode ini.`,
                 session: session
             }),
         });
