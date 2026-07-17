@@ -1,4 +1,4 @@
-import { api } from "encore.dev/api";
+import { api, APIError } from "encore.dev/api";
 import { db } from "../db/db";
 import { logActivity } from "../utils/logger";
 import { dispatchOtp } from "./otp";
@@ -83,11 +83,11 @@ export const registerSendOtp = api(
     { expose: true, method: "POST", path: "/auth/register-send-otp" },
     async (req: { email: string; phone: string; method: string }): Promise<SuccessResponse> => {
         const existingEmail = await db.queryRow`SELECT id FROM users WHERE email = ${req.email}`;
-        if (existingEmail) throw new Error("Email sudah terdaftar");
+        if (existingEmail) throw APIError.alreadyExists("Email sudah terdaftar");
 
         if (req.phone) {
             const existingPhone = await db.queryRow`SELECT id FROM users WHERE phone = ${req.phone}`;
-            if (existingPhone) throw new Error("Nomor WhatsApp sudah terdaftar");
+            if (existingPhone) throw APIError.alreadyExists("Nomor WhatsApp sudah terdaftar");
         }
 
         const otp = generateOTP();
@@ -109,12 +109,12 @@ export const registerVerifyOtp = api(
             SELECT id FROM otp_codes 
             WHERE identifier = ${req.phone || req.email} AND code = ${req.code} AND expires_at > NOW()
         `;
-        if (!otpRecord) throw new Error("Kode OTP salah atau sudah kedaluwarsa");
+        if (!otpRecord) throw APIError.invalidArgument("Kode OTP salah atau sudah kedaluwarsa");
 
         await db.exec`DELETE FROM otp_codes WHERE id = ${otpRecord.id}`;
 
         const existing = await db.queryRow`SELECT id FROM users WHERE email = ${req.email}`;
-        if (existing) throw new Error("Email sudah terdaftar");
+        if (existing) throw APIError.alreadyExists("Email sudah terdaftar");
 
         const hash = req.password ? await bcrypt.hash(req.password, 10) : "";
         const user = await db.queryRow`
